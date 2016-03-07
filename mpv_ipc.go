@@ -6,17 +6,29 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"sync"
 )
 
 type Connection struct {
-	client          net.Conn
-	socketName      string
+	client     net.Conn
+	socketName string
+
 	lastRequest     uint
 	waitingRequests map[uint]chan *commandResult
-	lock            *sync.Mutex
+
+	lastListener   uint
+	eventListeners map[uint]chan *Event
+
+	lock *sync.Mutex
+}
+
+type Event struct {
+	Name   string `json:"event"`
+	Reason string `json:"reason"`
+	Prefix string `json:"prefix"`
+	Level  string `json:"level"`
+	Text   string `json:"text"`
 }
 
 func NewConnection(socketName string) *Connection {
@@ -24,6 +36,7 @@ func NewConnection(socketName string) *Connection {
 		socketName:      socketName,
 		lock:            &sync.Mutex{},
 		waitingRequests: make(map[uint]chan *commandResult),
+		eventListeners:  make(map[uint]chan *Event),
 	}
 }
 
@@ -35,6 +48,22 @@ func (c *Connection) Open() error {
 	c.client = client
 	go c.listen()
 	return nil
+}
+
+func (c *Connection) ListenForEvents(stop chan struct{}, events chan *Event) {
+	c.lock.Lock()
+	c.lastListener++
+	id := c.lastListener
+	c.eventListeners[id] = events
+	c.lock.Unlock()
+
+	<-stop
+
+	c.lock.Lock()
+	delete(c.eventListeners, id)
+	c.lock.Unlock()
+
+	close(events)
 }
 
 func (c *Connection) Call(arguments ...interface{}) (interface{}, error) {
@@ -104,22 +133,49 @@ type commandResult struct {
 	Id     uint        `json:"request_id"`
 }
 
+func (c *Connection) checkResult(data []byte) {
+	result := &commandResult{}
+	err := json.Unmarshal(data, &result)
+	if err != nil {
+		return // skip malformed data
+	} else {
+		if result.Status == "" {
+			return // not a result
+		}
+		c.lock.Lock()
+		request, ok := c.waitingRequests[result.Id]
+		c.lock.Unlock()
+		if ok {
+			request <- result
+		}
+	}
+}
+
+func (c *Connection) checkEvent(data []byte) {
+	event := &Event{}
+	err := json.Unmarshal(data, &event)
+	if err != nil {
+		return // skip malformed data
+	} else {
+		if event.Name == "" {
+			return // not an event
+		}
+		c.lock.Lock()
+		for listenerId := range c.eventListeners {
+			listener := c.eventListeners[listenerId]
+			go func() {
+				listener <- event
+			}()
+		}
+		c.lock.Unlock()
+	}
+}
+
 func (c *Connection) listen() {
 	scanner := bufio.NewScanner(c.client)
 	for scanner.Scan() {
 		data := scanner.Bytes()
-		log.Printf("got some data: %s", string(data))
-		result := &commandResult{}
-		err := json.Unmarshal(data, &result)
-		if err == nil {
-			c.lock.Lock()
-			request, ok := c.waitingRequests[result.Id]
-			c.lock.Unlock()
-			if ok {
-				request <- result
-			}
-		} else {
-			log.Printf(":( %s", err)
-		}
+		c.checkEvent(data)
+		c.checkResult(data)
 	}
 }
