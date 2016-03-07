@@ -1,6 +1,6 @@
 // Package mpv_ipc provides an interface for communicating with the mpv media
 // player via it's JSON IPC interface
-package mpv_ipc
+package mpvipc
 
 import (
 	"bufio"

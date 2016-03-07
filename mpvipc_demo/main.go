@@ -4,11 +4,11 @@ import (
 	"log"
 	"time"
 
-	"github.com/DexterLB/mpv_ipc"
+	"github.com/DexterLB/mpvipc"
 )
 
 func main() {
-	conn := mpv_ipc.NewConnection("/tmp/mpv_rpc")
+	conn := mpvipc.NewConnection("/tmp/mpv_rpc")
 	err := conn.Open()
 	if err != nil {
 		log.Fatal(err)
