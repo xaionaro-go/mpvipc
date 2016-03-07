@@ -43,6 +43,12 @@ type Event struct {
 
 	// Text is the text of a log-message (only if Name is "log-message")
 	Text string `json:"text"`
+
+	// ID is the user-set property ID (on events triggered by observed properties)
+	ID uint `json:"id"`
+
+	// Data is the property value (on events triggered by observed properties)
+	Data interface{} `json:"data"`
 }
 
 // NewConnection returns a Connection associated with the given unix socket
