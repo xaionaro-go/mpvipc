@@ -17,37 +17,11 @@ func main() {
 
 	events, stopListening := conn.NewEventListener()
 
-	result, err := conn.Call("set_property", "pause", true)
+	path, err := conn.Get("path")
 	if err != nil {
 		log.Fatal(err)
-	} else {
-		log.Printf("got result: %v", result)
 	}
-
-	result, err = conn.Call("get_property", "pause")
-	if err != nil {
-		log.Fatal(err)
-	} else {
-		log.Printf("got result: %v", result)
-	}
-
-	go func() {
-		time.Sleep(3 * time.Second)
-		if conn.IsClosed() {
-			err := conn.Open()
-			if err != nil {
-				log.Print(err)
-				return
-			}
-		}
-
-		result, err := conn.Call("set_property", "pause", false)
-		if err != nil {
-			log.Fatalf("can't set: %s", err)
-		} else {
-			log.Printf("got result: %v", result)
-		}
-	}()
+	log.Printf("path: %s", path)
 
 	go func() {
 		time.Sleep(5 * time.Second)

@@ -1,4 +1,4 @@
-// Package mpv_ipc provides an interface for communicating with the mpv media
+// Package mpvipc provides an interface for communicating with the mpv media
 // player via it's JSON IPC interface
 package mpvipc
 
@@ -10,6 +10,7 @@ import (
 	"sync"
 )
 
+// Connection represents a connection to a mpv IPC socket
 type Connection struct {
 	client     net.Conn
 	socketName string
@@ -23,14 +24,28 @@ type Connection struct {
 	lock *sync.Mutex
 }
 
+// Event represents an event received from mpv. For a list of all possible
+// events, see https://mpv.io/manual/master/#list-of-events
 type Event struct {
-	Name   string `json:"event"`
+	// Name is the only obligatory field: the name of the event
+	Name string `json:"event"`
+
+	// Reason is the reason for the event: currently used for the "end-file"
+	// event. When Name is "end-file", possible values of Reason are:
+	// "eof", "stop", "quit", "error", "redirect", "unknown"
 	Reason string `json:"reason"`
+
+	// Prefix is the log-message prefix (only if Name is "log-message")
 	Prefix string `json:"prefix"`
-	Level  string `json:"level"`
-	Text   string `json:"text"`
+
+	// Level is the loglevel for a log-message (only if Name is "log-message")
+	Level string `json:"level"`
+
+	// Text is the text of a log-message (only if Name is "log-message")
+	Text string `json:"text"`
 }
 
+// NewConnection returns a Connection associated with the given unix socket
 func NewConnection(socketName string) *Connection {
 	return &Connection{
 		socketName:      socketName,
@@ -40,6 +55,9 @@ func NewConnection(socketName string) *Connection {
 	}
 }
 
+// Open connects to the socket. Returns an error if already connected.
+// It also starts listening to events, so ListenForEvents() can be called
+// afterwards.
 func (c *Connection) Open() error {
 	if c.client != nil {
 		return fmt.Errorf("already open")
@@ -53,6 +71,9 @@ func (c *Connection) Open() error {
 	return nil
 }
 
+// ListenForEvents blocks until something is received on the stop channel.
+// In the mean time, events received on the socket will be sent on the events
+// channel. They may not appear in the same order they happened in.
 func (c *Connection) ListenForEvents(events chan *Event, stop chan struct{}) {
 	c.lock.Lock()
 	c.lastListener++
@@ -69,6 +90,10 @@ func (c *Connection) ListenForEvents(events chan *Event, stop chan struct{}) {
 	close(events)
 }
 
+// NewEventListener is a convenience wrapper around ListenForEvents(). It
+// creates and returns the event channel and the stop channel. After calling
+// NewEventListener, read events from the events channel and send an empty
+// struct to the stop channel to close it.
 func (c *Connection) NewEventListener() (chan *Event, chan struct{}) {
 	events := make(chan *Event)
 	stop := make(chan struct{})
@@ -76,6 +101,9 @@ func (c *Connection) NewEventListener() (chan *Event, chan struct{}) {
 	return events, stop
 }
 
+// Call calls an arbitrary command and returns its result. For a list of
+// possible functions, see https://mpv.io/manual/master/#commands and
+// https://mpv.io/manual/master/#list-of-input-commands
 func (c *Connection) Call(arguments ...interface{}) (interface{}, error) {
 	c.lock.Lock()
 	c.lastRequest++
@@ -103,6 +131,20 @@ func (c *Connection) Call(arguments ...interface{}) (interface{}, error) {
 	return nil, fmt.Errorf("mpv error: %s", result.Status)
 }
 
+// Set is a shortcut to Call("set_property", property, value)
+func (c *Connection) Set(property string, value interface{}) error {
+	_, err := c.Call("set_property", property, value)
+	return err
+}
+
+// Get is a shortcut to Call("get_property", property)
+func (c *Connection) Get(property string) (interface{}, error) {
+	value, err := c.Call("get_property", property)
+	return value, err
+}
+
+// Close closes the socket, disconnecting from mpv. It is safe to call Close()
+// on an already closed connection.
 func (c *Connection) Close() error {
 	if c.client != nil {
 		err := c.client.Close()
@@ -114,6 +156,17 @@ func (c *Connection) Close() error {
 	return nil
 }
 
+// IsClosed returns true if the connection is closed. There are several cases
+// in which a connection is closed:
+//
+// 1. Close() has been called
+//
+// 2. The connection has been initialised but Open() hasn't been called yet
+//
+// 3. The connection terminated because of an error, mpv exiting or crashing
+//
+// It's ok to use IsClosed() to check if you need to reopen the connection
+// before calling a command.
 func (c *Connection) IsClosed() bool {
 	return c.client == nil
 }
@@ -124,7 +177,7 @@ func (c *Connection) sendCommand(id uint, arguments ...interface{}) error {
 	}
 	message := &commandRequest{
 		Arguments: arguments,
-		Id:        id,
+		ID:        id,
 	}
 	data, err := json.Marshal(&message)
 	if err != nil {
@@ -143,13 +196,13 @@ func (c *Connection) sendCommand(id uint, arguments ...interface{}) error {
 
 type commandRequest struct {
 	Arguments []interface{} `json:"command"`
-	Id        uint          `json:"request_id"`
+	ID        uint          `json:"request_id"`
 }
 
 type commandResult struct {
 	Status string      `json:"error"`
 	Data   interface{} `json:"data"`
-	Id     uint        `json:"request_id"`
+	ID     uint        `json:"request_id"`
 }
 
 func (c *Connection) checkResult(data []byte) {
@@ -157,16 +210,15 @@ func (c *Connection) checkResult(data []byte) {
 	err := json.Unmarshal(data, &result)
 	if err != nil {
 		return // skip malformed data
-	} else {
-		if result.Status == "" {
-			return // not a result
-		}
-		c.lock.Lock()
-		request, ok := c.waitingRequests[result.Id]
-		c.lock.Unlock()
-		if ok {
-			request <- result
-		}
+	}
+	if result.Status == "" {
+		return // not a result
+	}
+	c.lock.Lock()
+	request, ok := c.waitingRequests[result.ID]
+	c.lock.Unlock()
+	if ok {
+		request <- result
 	}
 }
 
@@ -175,19 +227,18 @@ func (c *Connection) checkEvent(data []byte) {
 	err := json.Unmarshal(data, &event)
 	if err != nil {
 		return // skip malformed data
-	} else {
-		if event.Name == "" {
-			return // not an event
-		}
-		c.lock.Lock()
-		for listenerId := range c.eventListeners {
-			listener := c.eventListeners[listenerId]
-			go func() {
-				listener <- event
-			}()
-		}
-		c.lock.Unlock()
 	}
+	if event.Name == "" {
+		return // not an event
+	}
+	c.lock.Lock()
+	for listenerID := range c.eventListeners {
+		listener := c.eventListeners[listenerID]
+		go func() {
+			listener <- event
+		}()
+	}
+	c.lock.Unlock()
 }
 
 func (c *Connection) listen() {
@@ -197,5 +248,5 @@ func (c *Connection) listen() {
 		c.checkEvent(data)
 		c.checkResult(data)
 	}
-	c.Close()
+	_ = c.Close()
 }
