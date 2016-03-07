@@ -98,9 +98,8 @@ func (c *Connection) ListenForEvents(events chan<- *Event, stop <-chan struct{})
 
 	c.lock.Lock()
 	delete(c.eventListeners, id)
-	c.lock.Unlock()
-
 	close(events)
+	c.lock.Unlock()
 }
 
 // NewEventListener is a convenience wrapper around ListenForEvents(). It
