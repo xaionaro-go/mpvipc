@@ -15,10 +15,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	stopListening := make(chan struct{})
-	events := make(chan *mpv_ipc.Event)
-
-	go conn.ListenForEvents(stopListening, events)
+	events, stopListening := conn.NewEventListener()
 
 	result, err := conn.Call("set_property", "pause", true)
 	if err != nil {
@@ -26,6 +23,7 @@ func main() {
 	} else {
 		log.Printf("got result: %v", result)
 	}
+
 	result, err = conn.Call("get_property", "pause")
 	if err != nil {
 		log.Fatal(err)

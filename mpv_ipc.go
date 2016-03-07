@@ -50,7 +50,7 @@ func (c *Connection) Open() error {
 	return nil
 }
 
-func (c *Connection) ListenForEvents(stop chan struct{}, events chan *Event) {
+func (c *Connection) ListenForEvents(events chan *Event, stop chan struct{}) {
 	c.lock.Lock()
 	c.lastListener++
 	id := c.lastListener
@@ -64,6 +64,13 @@ func (c *Connection) ListenForEvents(stop chan struct{}, events chan *Event) {
 	c.lock.Unlock()
 
 	close(events)
+}
+
+func (c *Connection) NewEventListener() (chan *Event, chan struct{}) {
+	events := make(chan *Event)
+	stop := make(chan struct{})
+	go c.ListenForEvents(events, stop)
+	return events, stop
 }
 
 func (c *Connection) Call(arguments ...interface{}) (interface{}, error) {
@@ -93,6 +100,15 @@ func (c *Connection) Call(arguments ...interface{}) (interface{}, error) {
 	return nil, fmt.Errorf("mpv error: %s", result.Status)
 }
 
+func (c *Connection) Close() error {
+	err := c.client.Close()
+	if err != nil {
+		return err
+	}
+	c.client = nil
+	return nil
+}
+
 func (c *Connection) sendCommand(id uint, arguments ...interface{}) error {
 	message := &commandRequest{
 		Arguments: arguments,
@@ -111,15 +127,6 @@ func (c *Connection) sendCommand(id uint, arguments ...interface{}) error {
 		return fmt.Errorf("can't terminate command: %s", err)
 	}
 	return err
-}
-
-func (c *Connection) Close() error {
-	err := c.client.Close()
-	if err != nil {
-		return err
-	}
-	c.client = nil
-	return nil
 }
 
 type commandRequest struct {
