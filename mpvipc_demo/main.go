@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/DexterLB/mpvipc"
@@ -20,7 +21,18 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("path: %s", path)
+	log.Printf("current file playing: %s", path)
+
+	err = conn.Set("pause", true)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("paused!")
+
+	_, err = conn.Call("observe_property", 42, "volume")
+	if err != nil {
+		fmt.Print(err)
+	}
 
 	go func() {
 		conn.WaitUntilClosed()
@@ -28,6 +40,12 @@ func main() {
 	}()
 
 	for event := range events {
-		log.Printf("event: %v", event)
+		if event.ID == 42 {
+			log.Printf("volume now is %f", event.Data.(float64))
+		} else {
+			log.Printf("received event: %s", event.Name)
+		}
 	}
+
+	log.Printf("mpv closed socket")
 }

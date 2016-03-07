@@ -13,10 +13,11 @@ A Go implementation of [mpv](http://mpv.io)'s [IPC interface](https://mpv.io/man
 
 * Do things to it!
     
-    ```golang
+    ```go
     package main
 
     import (
+        "fmt"
         "log"
 
         "github.com/DexterLB/mpvipc"
@@ -36,13 +37,13 @@ A Go implementation of [mpv](http://mpv.io)'s [IPC interface](https://mpv.io/man
         if err != nil {
             log.Fatal(err)
         }
-        log.Printf("current file playing: %s\n", path)
+        log.Printf("current file playing: %s", path)
 
-        _, err = conn.Set("pause", true)
+        err = conn.Set("pause", true)
         if err != nil {
             log.Fatal(err)
         }
-        log.Printf("paused!\n")
+        log.Printf("paused!")
 
         _, err = conn.Call("observe_property", 42, "volume")
         if err != nil {
@@ -56,13 +57,14 @@ A Go implementation of [mpv](http://mpv.io)'s [IPC interface](https://mpv.io/man
 
         for event := range events {
             if event.ID == 42 {
-                log.Printf("volume now is %f\n", event.Data.(float64))
+                log.Printf("volume now is %f", event.Data.(float64))
             } else {
-                log.Printf("received event: %s\n", event.Name)
+                log.Printf("received event: %s", event.Name)
             }
         }
-    }
 
+        log.Printf("mpv closed socket")
+    }
     ```
 
 See more examples at the [documentation](http://godoc.org/github.com/DexterLB/mpvipc).

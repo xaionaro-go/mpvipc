@@ -19,7 +19,7 @@ type Connection struct {
 	waitingRequests map[uint]chan *commandResult
 
 	lastListener   uint
-	eventListeners map[uint]chan *Event
+	eventListeners map[uint]chan<- *Event
 
 	lastCloseWaiter uint
 	closeWaiters    map[uint]chan struct{}
@@ -60,7 +60,7 @@ func NewConnection(socketName string) *Connection {
 		socketName:      socketName,
 		lock:            &sync.Mutex{},
 		waitingRequests: make(map[uint]chan *commandResult),
-		eventListeners:  make(map[uint]chan *Event),
+		eventListeners:  make(map[uint]chan<- *Event),
 		closeWaiters:    make(map[uint]chan struct{}),
 	}
 }
