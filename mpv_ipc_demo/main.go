@@ -32,6 +32,24 @@ func main() {
 	}
 
 	go func() {
+		time.Sleep(3 * time.Second)
+		if conn.IsClosed() {
+			err := conn.Open()
+			if err != nil {
+				log.Print(err)
+				return
+			}
+		}
+
+		result, err := conn.Call("set_property", "pause", false)
+		if err != nil {
+			log.Fatalf("can't set: %s", err)
+		} else {
+			log.Printf("got result: %v", result)
+		}
+	}()
+
+	go func() {
 		time.Sleep(5 * time.Second)
 		stopListening <- struct{}{}
 	}()

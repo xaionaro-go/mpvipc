@@ -41,6 +41,9 @@ func NewConnection(socketName string) *Connection {
 }
 
 func (c *Connection) Open() error {
+	if c.client != nil {
+		return fmt.Errorf("already open")
+	}
 	client, err := net.Dial("unix", c.socketName)
 	if err != nil {
 		return fmt.Errorf("can't connect to mpv's socket: %s", err)
@@ -101,15 +104,24 @@ func (c *Connection) Call(arguments ...interface{}) (interface{}, error) {
 }
 
 func (c *Connection) Close() error {
-	err := c.client.Close()
-	if err != nil {
-		return err
+	if c.client != nil {
+		err := c.client.Close()
+		if err != nil {
+			return err
+		}
+		c.client = nil
 	}
-	c.client = nil
 	return nil
 }
 
+func (c *Connection) IsClosed() bool {
+	return c.client == nil
+}
+
 func (c *Connection) sendCommand(id uint, arguments ...interface{}) error {
+	if c.client == nil {
+		return fmt.Errorf("trying to send command on closed mpv client")
+	}
 	message := &commandRequest{
 		Arguments: arguments,
 		Id:        id,
@@ -185,4 +197,5 @@ func (c *Connection) listen() {
 		c.checkEvent(data)
 		c.checkResult(data)
 	}
+	c.Close()
 }
