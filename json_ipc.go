@@ -21,6 +21,9 @@ type Connection struct {
 	lastListener   uint
 	eventListeners map[uint]chan *Event
 
+	lastCloseWaiter uint
+	closeWaiters    map[uint]chan struct{}
+
 	lock *sync.Mutex
 }
 
@@ -58,6 +61,7 @@ func NewConnection(socketName string) *Connection {
 		lock:            &sync.Mutex{},
 		waitingRequests: make(map[uint]chan *commandResult),
 		eventListeners:  make(map[uint]chan *Event),
+		closeWaiters:    make(map[uint]chan struct{}),
 	}
 }
 
@@ -65,6 +69,9 @@ func NewConnection(socketName string) *Connection {
 // It also starts listening to events, so ListenForEvents() can be called
 // afterwards.
 func (c *Connection) Open() error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
 	if c.client != nil {
 		return fmt.Errorf("already open")
 	}
@@ -80,7 +87,7 @@ func (c *Connection) Open() error {
 // ListenForEvents blocks until something is received on the stop channel.
 // In the mean time, events received on the socket will be sent on the events
 // channel. They may not appear in the same order they happened in.
-func (c *Connection) ListenForEvents(events chan *Event, stop chan struct{}) {
+func (c *Connection) ListenForEvents(events chan<- *Event, stop <-chan struct{}) {
 	c.lock.Lock()
 	c.lastListener++
 	id := c.lastListener
@@ -152,12 +159,16 @@ func (c *Connection) Get(property string) (interface{}, error) {
 // Close closes the socket, disconnecting from mpv. It is safe to call Close()
 // on an already closed connection.
 func (c *Connection) Close() error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
 	if c.client != nil {
 		err := c.client.Close()
-		if err != nil {
-			return err
+		for waiterID := range c.closeWaiters {
+			close(c.closeWaiters[waiterID])
 		}
 		c.client = nil
+		return err
 	}
 	return nil
 }
@@ -175,6 +186,29 @@ func (c *Connection) Close() error {
 // before calling a command.
 func (c *Connection) IsClosed() bool {
 	return c.client == nil
+}
+
+// WaitUntilClosed blocks until the connection becomes closed. See IsClosed()
+// for an explanation of the closed state.
+func (c *Connection) WaitUntilClosed() {
+	c.lock.Lock()
+	if c.IsClosed() {
+		c.lock.Unlock()
+		return
+	}
+
+	closed := make(chan struct{})
+	c.lastCloseWaiter++
+	waiterID := c.lastCloseWaiter
+	c.closeWaiters[waiterID] = closed
+
+	c.lock.Unlock()
+
+	<-closed
+
+	c.lock.Lock()
+	delete(c.closeWaiters, waiterID)
+	c.lock.Unlock()
 }
 
 func (c *Connection) sendCommand(id uint, arguments ...interface{}) error {

@@ -163,3 +163,27 @@ func ExampleConnection_NewEventListener() {
 		}
 	}
 }
+
+func ExampleConnection_WaitUntilClosed() {
+	conn := NewConnection("/tmp/mpv_socket")
+	err := conn.Open()
+	if err != nil {
+		fmt.Print(err)
+		return
+	}
+	defer func() {
+		_ = conn.Close()
+	}()
+
+	events, stop := conn.NewEventListener()
+
+	// print events until mpv exits, then exit
+	go func() {
+		conn.WaitUntilClosed()
+		stop <- struct{}{}
+	}()
+
+	for event := range events {
+		fmt.Printf("received event: %s\n", event.Name)
+	}
+}

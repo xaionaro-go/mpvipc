@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"time"
 
 	"github.com/DexterLB/mpvipc"
 )
@@ -24,7 +23,7 @@ func main() {
 	log.Printf("path: %s", path)
 
 	go func() {
-		time.Sleep(5 * time.Second)
+		conn.WaitUntilClosed()
 		stopListening <- struct{}{}
 	}()
 
