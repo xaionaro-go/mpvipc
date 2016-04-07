@@ -1,6 +1,7 @@
 # mpvipc
 [![GoDoc](https://godoc.org/github.com/DexterLB/mpvipc?status.svg)](http://godoc.org/github.com/DexterLB/mpvipc)
 [![Build Status](https://travis-ci.org/DexterLB/mpvipc.svg?branch=master)](https://travis-ci.org/DexterLB/mpvipc)
+[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/DexterLB/mpvipc/master/LICENSE)
 
 A Go implementation of [mpv](http://mpv.io)'s [IPC interface](https://mpv.io/manual/master/#json-ipc)
 
