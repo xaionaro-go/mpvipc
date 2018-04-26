@@ -4,6 +4,8 @@ go:
   - 1.5
   - 1.6
 before_install: bash .gitcookie.sh
-script: go test -v ./...
+script:
+  - go get -v -d
+  - go test -v ./...
 env:
   - GO15VENDOREXPERIMENT=1
