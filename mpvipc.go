@@ -7,10 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"runtime"
 	"sync"
-
-	"gopkg.in/natefinch/npipe.v2"
 )
 
 // Connection represents a connection to a mpv IPC socket
@@ -85,14 +82,6 @@ func (c *Connection) Open() error {
 	c.client = client
 	go c.listen()
 	return nil
-}
-
-func dial(path string) (net.Conn, error) {
-	if runtime.GOOS == "windows" {
-		return npipe.Dial(path)
-	}
-
-	return net.Dial("unix", path)
 }
 
 // ListenForEvents blocks until something is received on the stop channel.
