@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/natefinch/npipe"
+	"gopkg.in/natefinch/npipe.v2"
 )
 
 // Connection represents a connection to a mpv IPC socket
