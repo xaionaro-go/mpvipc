@@ -84,9 +84,12 @@ func (c *Connection) Open() error {
 	return nil
 }
 
-// ListenForEvents blocks until something is received on the stop channel.
+// ListenForEvents blocks until something is received on the stop channel (or
+// it's closed).
 // In the mean time, events received on the socket will be sent on the events
 // channel. They may not appear in the same order they happened in.
+//
+// The events channel is closed automatically just before this method returns.
 func (c *Connection) ListenForEvents(events chan<- *Event, stop <-chan struct{}) {
 	c.lock.Lock()
 	c.lastListener++
