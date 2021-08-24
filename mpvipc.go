@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"reflect"
 	"sync"
 )
 
@@ -52,6 +53,43 @@ type Event struct {
 
 	// Data is the property value (on events triggered by observed properties)
 	Data interface{} `json:"data"`
+
+	// ExtraData contains extra attributes of the event payload (on spontaneous events)
+	ExtraData map[string]interface{} `json:"-"`
+}
+
+var eventFieldNames = []string{}
+
+func init() {
+	// collect all named fields into a global
+	val := reflect.ValueOf(Event{})
+	for i := 0; i < val.Type().NumField(); i++ {
+		field := val.Type().Field(i).Tag.Get("json")
+		if field != "-" {
+			eventFieldNames = append(eventFieldNames, field)
+		}
+	}
+}
+
+func (e *Event) UnmarshalJSON(data []byte) error {
+	type Proxy Event
+
+	// unmarshal named fields
+	if err := json.Unmarshal(data, (*Proxy)(e)); err != nil {
+		return err
+	}
+
+	// unmarshal unnamed fields into our container
+	if err := json.Unmarshal(data, &e.ExtraData); err != nil {
+		return err
+	}
+
+	// drop all named fields from ExtraData
+	for _, field := range eventFieldNames {
+		delete(e.ExtraData, field)
+	}
+
+	return nil
 }
 
 // NewConnection returns a Connection associated with the given unix socket
