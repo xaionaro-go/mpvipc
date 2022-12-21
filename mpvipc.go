@@ -144,7 +144,7 @@ func (c *Connection) ListenForEvents(events chan<- *Event, stop <-chan struct{})
 // NewEventListener, read events from the events channel and send an empty
 // struct to the stop channel to close it.
 func (c *Connection) NewEventListener() (chan *Event, chan struct{}) {
-	events := make(chan *Event)
+	events := make(chan *Event, 256)
 	stop := make(chan struct{})
 	go c.ListenForEvents(events, stop)
 	return events, stop

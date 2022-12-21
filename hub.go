@@ -68,8 +68,11 @@ func (h *Hub) run() {
 				select {
 				case listener.send <- message:
 				default:
-					close(listener.send)
-					delete(h.listeners, listener)
+					/* send would block (channel full)
+					 * we could delete the listener here
+					 * or we can drop the event */
+					//close(listener.send)
+					//delete(h.listeners, listener)
 				}
 			}
 		}
