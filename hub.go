@@ -65,15 +65,7 @@ func (h *Hub) run() {
 			}
 		case message := <-h.broadcast:
 			for listener := range h.listeners {
-				select {
-				case listener.send <- message:
-				default:
-					/* send would block (channel full)
-					 * we could delete the listener here
-					 * or we can drop the event */
-					//close(listener.send)
-					//delete(h.listeners, listener)
-				}
+				listener.send <- message
 			}
 		}
 	}
