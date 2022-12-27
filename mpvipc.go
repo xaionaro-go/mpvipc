@@ -19,8 +19,7 @@ type Connection struct {
 	lastRequest     uint
 	waitingRequests map[uint]chan *commandResult
 
-	lastListener   uint
-	eventListeners map[uint]chan<- *Event
+	eventHub        *Hub
 
 	lastCloseWaiter uint
 	closeWaiters    map[uint]chan struct{}
@@ -56,6 +55,10 @@ type Event struct {
 
 	// ExtraData contains extra attributes of the event payload (on spontaneous events)
 	ExtraData map[string]interface{} `json:"-"`
+}
+
+type EventListener struct {
+	send chan<- *Event
 }
 
 var eventFieldNames = []string{}
@@ -98,7 +101,6 @@ func NewConnection(socketName string) *Connection {
 		socketName:      socketName,
 		lock:            &sync.Mutex{},
 		waitingRequests: make(map[uint]chan *commandResult),
-		eventListeners:  make(map[uint]chan<- *Event),
 		closeWaiters:    make(map[uint]chan struct{}),
 	}
 }
@@ -117,7 +119,9 @@ func (c *Connection) Open() error {
 	if err != nil {
 		return fmt.Errorf("can't connect to mpv's socket: %s", err)
 	}
-	c.client = client
+	c.client   = client
+	c.eventHub = newHub()
+	go c.eventHub.run()
 	go c.listen()
 	return nil
 }
@@ -129,18 +133,10 @@ func (c *Connection) Open() error {
 //
 // The events channel is closed automatically just before this method returns.
 func (c *Connection) ListenForEvents(events chan<- *Event, stop <-chan struct{}) {
-	c.lock.Lock()
-	c.lastListener++
-	id := c.lastListener
-	c.eventListeners[id] = events
-	c.lock.Unlock()
-
+	listener := &EventListener{send:events}
+	c.eventHub.register   <- listener
 	<-stop
-
-	c.lock.Lock()
-	delete(c.eventListeners, id)
-	close(events)
-	c.lock.Unlock()
+	c.eventHub.unregister <- listener
 }
 
 // NewEventListener is a convenience wrapper around ListenForEvents(). It
@@ -148,7 +144,7 @@ func (c *Connection) ListenForEvents(events chan<- *Event, stop <-chan struct{})
 // NewEventListener, read events from the events channel and send an empty
 // struct to the stop channel to close it.
 func (c *Connection) NewEventListener() (chan *Event, chan struct{}) {
-	events := make(chan *Event)
+	events := make(chan *Event, 256)
 	stop := make(chan struct{})
 	go c.ListenForEvents(events, stop)
 	return events, stop
@@ -311,14 +307,7 @@ func (c *Connection) checkEvent(data []byte) {
 	if event.Name == "" {
 		return // not an event
 	}
-	c.lock.Lock()
-	for listenerID := range c.eventListeners {
-		listener := c.eventListeners[listenerID]
-		go func() {
-			listener <- event
-		}()
-	}
-	c.lock.Unlock()
+	c.eventHub.broadcast <- event
 }
 
 func (c *Connection) listen() {
