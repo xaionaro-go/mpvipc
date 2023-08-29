@@ -48,7 +48,7 @@ type Event struct {
 	Text string `json:"text"`
 
 	// ID is the user-set property ID (on events triggered by observed properties)
-	ID uint `json:"id"`
+	ID int64 `json:"id"`
 
 	// Data is the property value (on events triggered by observed properties)
 	Data interface{} `json:"data"`
