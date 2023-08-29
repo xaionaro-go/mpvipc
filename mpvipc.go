@@ -16,8 +16,8 @@ type Connection struct {
 	client     net.Conn
 	socketName string
 
-	lastRequest     uint
-	waitingRequests map[uint]chan *commandResult
+	lastRequest     int64
+	waitingRequests map[int64]chan *commandResult
 
 	eventHub        *Hub
 
@@ -100,7 +100,7 @@ func NewConnection(socketName string) *Connection {
 	return &Connection{
 		socketName:      socketName,
 		lock:            &sync.Mutex{},
-		waitingRequests: make(map[uint]chan *commandResult),
+		waitingRequests: make(map[int64]chan *commandResult),
 		closeWaiters:    make(map[uint]chan struct{}),
 	}
 }
@@ -247,7 +247,7 @@ func (c *Connection) WaitUntilClosed() {
 	c.lock.Unlock()
 }
 
-func (c *Connection) sendCommand(id uint, arguments ...interface{}) error {
+func (c *Connection) sendCommand(id int64, arguments ...interface{}) error {
 	if c.client == nil {
 		return fmt.Errorf("trying to send command on closed mpv client")
 	}
@@ -272,13 +272,13 @@ func (c *Connection) sendCommand(id uint, arguments ...interface{}) error {
 
 type commandRequest struct {
 	Arguments []interface{} `json:"command"`
-	ID        uint          `json:"request_id"`
+	ID        int64         `json:"request_id"`
 }
 
 type commandResult struct {
 	Status string      `json:"error"`
 	Data   interface{} `json:"data"`
-	ID     uint        `json:"request_id"`
+	ID     int64       `json:"request_id"`
 }
 
 func (c *Connection) checkResult(data []byte) {
