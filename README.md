@@ -10,7 +10,7 @@ A Go implementation of [mpv](http://mpv.io)'s [IPC interface](https://mpv.io/man
 * Run mpv
 
     ```
-    $ mpv some_file.mkv --input-unix-socket=/tmp/mpv_socket
+    $ mpv some_file.mkv --input-ipc-server=/tmp/mpv_socket
     ```
 
 * Do things to it!
