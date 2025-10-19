@@ -223,6 +223,12 @@ func (c *Connection) Close() error {
 // It's ok to use IsClosed() to check if you need to reopen the connection
 // before calling a command.
 func (c *Connection) IsClosed() bool {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	return c.isClosed()
+}
+
+func (c *Connection) isClosed() bool {
 	return c.client == nil
 }
 
@@ -231,7 +237,7 @@ func (c *Connection) IsClosed() bool {
 func (c *Connection) WaitUntilClosed() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	if c.IsClosed() {
+	if c.isClosed() {
 		return
 	}
 
