@@ -50,10 +50,10 @@ type Event struct {
 	ID int64 `json:"id"`
 
 	// Data is the property value (on events triggered by observed properties)
-	Data interface{} `json:"data"`
+	Data any `json:"data"`
 
 	// ExtraData contains extra attributes of the event payload (on spontaneous events)
-	ExtraData map[string]interface{} `json:"-"`
+	ExtraData map[string]any `json:"-"`
 }
 
 type EventListener struct {
@@ -155,7 +155,7 @@ func (c *Connection) NewEventListener() (chan *Event, chan struct{}) {
 // Call calls an arbitrary command and returns its result. For a list of
 // possible functions, see https://mpv.io/manual/master/#commands and
 // https://mpv.io/manual/master/#list-of-input-commands
-func (c *Connection) Call(arguments ...interface{}) (interface{}, error) {
+func (c *Connection) Call(arguments ...any) (any, error) {
 	c.lock.Lock()
 	c.lastRequest++
 	id := c.lastRequest
@@ -183,13 +183,13 @@ func (c *Connection) Call(arguments ...interface{}) (interface{}, error) {
 }
 
 // Set is a shortcut to Call("set_property", property, value)
-func (c *Connection) Set(property string, value interface{}) error {
+func (c *Connection) Set(property string, value any) error {
 	_, err := c.Call("set_property", property, value)
 	return err
 }
 
 // Get is a shortcut to Call("get_property", property)
-func (c *Connection) Get(property string) (interface{}, error) {
+func (c *Connection) Get(property string) (any, error) {
 	value, err := c.Call("get_property", property)
 	return value, err
 }
@@ -238,7 +238,7 @@ func (c *Connection) WaitUntilClosed() {
 	<-c.closeWaiter
 }
 
-func (c *Connection) sendCommand(id int64, arguments ...interface{}) error {
+func (c *Connection) sendCommand(id int64, arguments ...any) error {
 	if c.client == nil {
 		return fmt.Errorf("trying to send command on closed mpv client")
 	}
@@ -262,14 +262,14 @@ func (c *Connection) sendCommand(id int64, arguments ...interface{}) error {
 }
 
 type commandRequest struct {
-	Arguments []interface{} `json:"command"`
-	ID        int64         `json:"request_id"`
+	Arguments []any `json:"command"`
+	ID        int64 `json:"request_id"`
 }
 
 type commandResult struct {
-	Status string      `json:"error"`
-	Data   interface{} `json:"data"`
-	ID     int64       `json:"request_id"`
+	Status string `json:"error"`
+	Data   any    `json:"data"`
+	ID     int64  `json:"request_id"`
 }
 
 func (c *Connection) checkResult(data []byte) {
