@@ -19,7 +19,7 @@ type Connection struct {
 	lastRequest     int64
 	waitingRequests map[int64]chan *commandResult
 
-	eventHub        *Hub
+	eventHub *Hub
 
 	lastCloseWaiter uint
 	closeWaiters    map[uint]chan struct{}
@@ -119,7 +119,7 @@ func (c *Connection) Open() error {
 	if err != nil {
 		return fmt.Errorf("can't connect to mpv's socket: %s", err)
 	}
-	c.client   = client
+	c.client = client
 	c.eventHub = newHub()
 	go c.eventHub.run()
 	go c.listen()
@@ -133,8 +133,8 @@ func (c *Connection) Open() error {
 //
 // The events channel is closed automatically just before this method returns.
 func (c *Connection) ListenForEvents(events chan<- *Event, stop <-chan struct{}) {
-	listener := &EventListener{send:events}
-	c.eventHub.register   <- listener
+	listener := &EventListener{send: events}
+	c.eventHub.register <- listener
 	<-stop
 	c.eventHub.unregister <- listener
 }

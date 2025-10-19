@@ -1,8 +1,9 @@
+//go:build windows
 // +build windows
 
 package mpvipc
 
-import ( 
+import (
 	"gopkg.in/natefinch/npipe.v2"
 	"net"
 )
