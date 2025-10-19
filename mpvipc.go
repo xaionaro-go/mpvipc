@@ -21,8 +21,7 @@ type Connection struct {
 
 	eventHub *Hub
 
-	lastCloseWaiter uint
-	closeWaiters    map[uint]chan struct{}
+	closeWaiter chan struct{}
 
 	lock *sync.Mutex
 }
@@ -97,12 +96,14 @@ func (e *Event) UnmarshalJSON(data []byte) error {
 
 // NewConnection returns a Connection associated with the given unix socket
 func NewConnection(socketName string) *Connection {
-	return &Connection{
+	c := &Connection{
 		socketName:      socketName,
 		lock:            &sync.Mutex{},
 		waitingRequests: make(map[int64]chan *commandResult),
-		closeWaiters:    make(map[uint]chan struct{}),
+		closeWaiter:     make(chan struct{}),
 	}
+	close(c.closeWaiter) // see the description of IsClosed()
+	return c
 }
 
 // Open connects to the socket. Returns an error if already connected.
@@ -120,6 +121,7 @@ func (c *Connection) Open() error {
 		return fmt.Errorf("can't connect to mpv's socket: %s", err)
 	}
 	c.client = client
+	c.closeWaiter = make(chan struct{})
 	c.eventHub = newHub()
 	go c.eventHub.run()
 	go c.listen()
@@ -198,15 +200,15 @@ func (c *Connection) Close() error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	if c.client != nil {
-		err := c.client.Close()
-		for waiterID := range c.closeWaiters {
-			close(c.closeWaiters[waiterID])
-		}
-		c.client = nil
-		return err
+	if c.client == nil {
+		// already closed
+		return nil
 	}
-	return nil
+
+	err := c.client.Close()
+	c.client = nil
+	close(c.closeWaiter)
+	return err
 }
 
 // IsClosed returns true if the connection is closed. There are several cases
@@ -228,23 +230,12 @@ func (c *Connection) IsClosed() bool {
 // for an explanation of the closed state.
 func (c *Connection) WaitUntilClosed() {
 	c.lock.Lock()
+	defer c.lock.Unlock()
 	if c.IsClosed() {
-		c.lock.Unlock()
 		return
 	}
 
-	closed := make(chan struct{})
-	c.lastCloseWaiter++
-	waiterID := c.lastCloseWaiter
-	c.closeWaiters[waiterID] = closed
-
-	c.lock.Unlock()
-
-	<-closed
-
-	c.lock.Lock()
-	delete(c.closeWaiters, waiterID)
-	c.lock.Unlock()
+	<-c.closeWaiter
 }
 
 func (c *Connection) sendCommand(id int64, arguments ...interface{}) error {
