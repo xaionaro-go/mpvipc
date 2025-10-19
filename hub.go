@@ -42,6 +42,9 @@ type Hub struct {
 
 	// Unregister requests from EventListeners.
 	unregister chan *EventListener
+
+	// Channel to signal hub closure
+	closeCh chan struct{}
 }
 
 func newHub() *Hub {
@@ -50,12 +53,21 @@ func newHub() *Hub {
 		register:   make(chan *EventListener),
 		unregister: make(chan *EventListener),
 		listeners:  make(map[*EventListener]bool),
+		closeCh:    make(chan struct{}),
 	}
 }
 
 func (h *Hub) run() {
+	defer func() {
+		for listener := range h.listeners {
+			delete(h.listeners, listener)
+			close(listener.send)
+		}
+	}()
 	for {
 		select {
+		case <-h.closeCh:
+			return
 		case listener := <-h.register:
 			h.listeners[listener] = true
 		case listener := <-h.unregister:
@@ -69,4 +81,8 @@ func (h *Hub) run() {
 			}
 		}
 	}
+}
+
+func (h *Hub) close() {
+	close(h.closeCh)
 }

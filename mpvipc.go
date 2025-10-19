@@ -122,9 +122,13 @@ func (c *Connection) Open() error {
 	}
 	c.client = client
 	c.closeWaiter = make(chan struct{})
-	c.eventHub = newHub()
-	go c.eventHub.run()
-	go c.listen()
+	eventHub := newHub()
+	c.eventHub = eventHub
+	go func() {
+		defer eventHub.close()
+		go eventHub.run()
+		c.listen()
+	}()
 	return nil
 }
 
